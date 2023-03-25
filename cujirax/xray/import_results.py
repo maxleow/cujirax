@@ -2,6 +2,7 @@ from enum import Enum
 from typing import List
 from pydantic import BaseModel
 from cujirax.cucumber import Feature
+from cujirax.xray import Endpoint, login, post
 
 
 class Status(str, Enum):
@@ -17,7 +18,7 @@ class Status(str, Enum):
 class Info(BaseModel):
     summary: str
     description: str
-    testPlanKey: str
+    testPlanKey: str = None
     testEnvironments: List[str] = None
     version: str = None
     user: str = None
@@ -64,3 +65,12 @@ class RequestBody(BaseModel):
     tests: List[Test]
     testExecutionKey: str = None
 
+
+def import_xray_json_results(requestBody: RequestBody):
+    header = login()
+    response = post(
+        endpoint=Endpoint.IMPORT_XRAY_JSON_RESULTS.value,
+        payload=requestBody,
+        headers=header
+    )
+    return response

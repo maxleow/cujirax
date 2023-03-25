@@ -71,15 +71,10 @@ class JiraX:
         })
 
     def create_issue(self, summary: str, description: str, issue_type: str) -> Jirakey:
-        """
-        Create Test Set when not exist.
-        """
-        test_sets = self.get_testsets(summary)
-        if test_sets:
+        issue = self.get_issues(summary, issue_type)
+        if issue:
             self.jira.update_issue_field
-            jira_key = test_sets[0]
-            self.jira.update_issue_field(
-                jira_key, fields={"description": description})
+            jira_key = issue[0]
             return jira_key
 
         issue = Issue(
@@ -87,7 +82,7 @@ class JiraX:
             project=Project(key=self.key),
             issuetype=IssueType(name=issue_type),
             description=description)
-
+        
         response = self.jira.create_issue(fields=issue.dict())
         return Jirakey(response.get('key'))
 
