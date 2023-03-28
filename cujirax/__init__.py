@@ -2,7 +2,7 @@
 Cucumber result to Jira Xray Test repository
 
 """
-__version__ = "0.1.2"
+__version__ = "0.2.0"
 
 
 import datetime
@@ -45,17 +45,17 @@ class CuJiraX:
         s1 = cucumber.Model.parse_file(cucumber_json)
         output = {}
         for f in s1.__root__:
-            testset_name = self.testset_name or f.uri.split("/")[-1]
+            testset_name = f.uri.split("/")[-1]
             testexecution_name = self.testexecution_name or datetime.date.today().strftime("%Y%m%d") + " :: " + testset_name
 
             ticket_ts, ticket_te = [
-                self.testset or self.jira.create_testset(
+                self.jira.create_testset(
                     summary=testset_name, 
-                    description=self.testset_desc or f.description
+                    description=f.description or "TBA"
                 ),
                 self.testexecution or self.jira.create_testexecution(
                     summary=testexecution_name, 
-                    description=self.testexecution_desc or f.description
+                    description=self.testexecution_desc or f.description or "TBA"
                 ),
             ]
 
@@ -70,14 +70,14 @@ class CuJiraX:
             output.update({
                 'test_set': ticket_ts,
                 'testset_name': testset_name,
-                'parent_testset': self.parent_testset,
+                'parent_testset': self.parent_testset_key,
                 'test_execution': ticket_te,
                 'testexecution_name': testexecution_name,
                 'test_plan': testplan_key,
                 'tests': tests,
             })
             
-            test_cases = [n for n in map(lambda x: self._new_testcase(x, self.jira_project, ticket_ts, self.parent_testset), new)]
+            test_cases = [n for n in map(lambda x: self._new_testcase(x, self.jira_project, ticket_ts, self.parent_testset_key), new)]
             test.bulk_import(test_cases) if test_cases else None
             
             # Import Results
@@ -86,7 +86,7 @@ class CuJiraX:
                 req = result.RequestBody(
                     info=result.Info(
                         summary=testexecution_name,
-                        description=self.testexecution_desc or f.description,
+                        description=self.testexecution_desc or f.description or "TBA",
                         testPlanKey=str(testplan_key) if testplan_key else testplan_key
                     ),
                     tests= _tests,
@@ -152,7 +152,7 @@ class CuJiraX:
         step_definitions = [(f"{step.keyword} {step.name}", step.result.status.value) for step in element.steps]
         test_name = cls.scenarioid_to_tescasename(element.id, element.keyword)
         test_sets = [str(x) for x in [testset_key, parent_testset_key] if x] if parent_testset_key else []
-
+        print("testsets:", test_sets)
         return test.CucumberTestCase(
             fields=test.Fields(
                 summary=test_name, 
