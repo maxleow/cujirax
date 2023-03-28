@@ -24,7 +24,7 @@ class CuJiraX:
         self.testexecution_desc = None
         self.parent_testset_key = parent_testset_key
 
-    def set_testexcution(self, jira_key: str):
+    def set_testexecution(self, jira_key: str):
         self.testexecution = Jirakey(jira_key)
 
     def set_testexecution_name(self, testexecution_name: str):
