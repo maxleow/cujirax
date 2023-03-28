@@ -38,7 +38,7 @@ def post(endpoint: str, payload: Union[BaseModel, List[BaseModel]], headers: Hea
     if isinstance(payload, list):
         _payload = [p.dict(by_alias=True, exclude_none=True) for p in payload]
         _payload = json.dumps(_payload)
-        print("payload", _payload)
+        # print("payload", _payload)
     else:
         _payload = payload.json(by_alias=True, exclude_none=True)
 

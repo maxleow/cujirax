@@ -60,8 +60,8 @@ class JiraX:
     def get_issues(self, summary: str, type: str) -> List[Jirakey]:
         query = f'issuetype="{type}" AND summary~"{summary}" AND project="{self.key}"'
         issues = self.jira.jql(query).get("issues")
-
-        return [Jirakey(issue.get('key')) for issue in issues]
+        
+        return [Jirakey(issue.get('key')) for issue in issues if issue.get('fields')['summary'] == summary]
 
     def link(self, parent_jira: str, child_jira: str, type="Parents"):
         return self.jira.create_issue_link({

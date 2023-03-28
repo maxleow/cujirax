@@ -2,7 +2,7 @@
 Cucumber result to Jira Xray Test repository
 
 """
-__version__ = "0.2.1"
+__version__ = "0.2.2"
 
 
 import datetime
@@ -121,7 +121,7 @@ class CuJiraX:
             test_key = tests[0]
             if not ignore_duplicate:
                 if len(tests) > 1:
-                    raise ValueError("More than 1 test key detected: ", tests)
+                    raise ValueError("More than 1 test key detected: ", tests, test_name)
                     
             statuses = [step.result.status.value for step in el.steps]
             agg_result = "passed" if all(s == 'passed' for s in statuses) else "failed"
@@ -137,7 +137,8 @@ class CuJiraX:
             test_name = cls.scenarioid_to_tescasename(el.id, el.keyword)
             tests = j.get_tests(test_name)
             if tests and not ignore_duplicate:
-                assert len(tests) == 1, "Duplicate key detected: {}".format(tests)
+                if len(tests) > 1:
+                    raise ValueError("More than 1 test key detected: ", tests, test_name)
             print("[searching...]", test_name, tests)
             found.append(el) if j.get_tests(test_name) else not_found.append(el)
 
