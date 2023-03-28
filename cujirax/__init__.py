@@ -118,9 +118,11 @@ class CuJiraX:
             tests = j.get_tests(test_name)
             assert tests, "Test not created: {}".format(test_name)
             
-            test_key = tests[0] if ignore_duplicate else None
-            assert test_key, "Test key cannot be None"
-            
+            test_key = tests[0]
+            if not ignore_duplicate:
+                if len(tests) > 1:
+                    raise ValueError("More than 1 test key detected: ", tests)
+                    
             statuses = [step.result.status.value for step in el.steps]
             agg_result = "passed" if all(s == 'passed' for s in statuses) else "failed"
             result_tests.append(result.Test(testKey=str(test_key), status=agg_result))
