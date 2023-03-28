@@ -15,27 +15,24 @@ from cujirax.jira import Jirakey, JiraX, Project
 
 
 class CuJiraX:
-    def __init__(self, jira_project: str, parent_testset=None) -> None:
+    def __init__(self, jira_project: str, parent_testset_key: str = None) -> None:
         self.jira_project = jira_project
         self.jira = JiraX(jira_project)
         
         self.testexecution = None
-        self.testset = None
-        self.testset_name = None
         self.testexecution_name = None
-        self.parent_testset = parent_testset
+        self.testexecution_desc = None
+        self.parent_testset_key = parent_testset_key
 
-    def set_testexcution(self, test_execution: str):
-        self.testexecution = Jirakey(test_execution)
+    def set_testexcution(self, jira_key: str):
+        self.testexecution = Jirakey(jira_key)
 
     def set_testexecution_name(self, testexecution_name: str):
         self.testexecution_name = testexecution_name
 
-    def set_testset(self, test_set: str):
-        self.testset = Jirakey(test_set)
+    def set_testexecution_desc(self, description: str):
+        self.testexecution_desc = description
 
-    def set_testset_name(self, testset_name: str):
-        self.testset_name = testset_name
 
     def to_xray(
             self, 
@@ -52,26 +49,35 @@ class CuJiraX:
             testexecution_name = self.testexecution_name or datetime.date.today().strftime("%Y%m%d") + " :: " + testset_name
 
             ticket_ts, ticket_te = [
-                self.testset or self.jira.create_testset(testset_name, f.description or "TBA"),
-                self.testexecution or self.jira.create_testexecution(testexecution_name, f.description or "TBA"),
+                self.testset or self.jira.create_testset(
+                    summary=testset_name, 
+                    description=self.testset_desc or f.description
+                ),
+                self.testexecution or self.jira.create_testexecution(
+                    summary=testexecution_name, 
+                    description=self.testexecution_desc or f.description
+                ),
             ]
 
-            output['test_set'] = ticket_ts
-            output['testset_name'] = testset_name
-            output['parent_testset'] = self.parent_testset
-            output['test_execution'] = ticket_te
-            output['test_execution_name'] = testexecution_name
-            output['test_plan'] = testplan_key
-            
             # Import Test cases
-            exists, new = self._split_elements_to_exist_and_new(f.elements, self.jira, ignore_duplicate)
+            exists, new = self._split_elements_to_exist_and_new(
+                elements=f.elements, 
+                j=self.jira, 
+                ignore_duplicate=ignore_duplicate
+            )
             
-            print("new:", len(new))
-            print("exists", len(exists))
             tests = [n for n in map(lambda x: self._update_description_if_exist(x,self.jira), exists)]
-            output['tests'] = tests
+            output.update({
+                'test_set': ticket_ts,
+                'testset_name': testset_name,
+                'parent_testset': self.parent_testset,
+                'test_execution': ticket_te,
+                'testexecution_name': testexecution_name,
+                'test_plan': testplan_key,
+                'tests': tests,
+            })
             
-            test_cases = [n for n in map(lambda x: self._new_testcase(x,ticket_ts, self.parent_testset, self.jira_project), new)]
+            test_cases = [n for n in map(lambda x: self._new_testcase(x, self.jira_project, ticket_ts, self.parent_testset), new)]
             test.bulk_import(test_cases) if test_cases else None
             
             # Import Results
@@ -80,19 +86,27 @@ class CuJiraX:
                 req = result.RequestBody(
                     info=result.Info(
                         summary=testexecution_name,
-                        description=f.description or "TBA",
+                        description=self.testexecution_desc or f.description,
                         testPlanKey=str(testplan_key) if testplan_key else testplan_key
                     ),
                     tests= _tests,
                     testExecutionKey=str(ticket_te)
                 )
                 res = result.import_xray_json_results(req)
-                print(res.status_code, res.json())
-                output['import_status'] = res.status_code
+                output.update({
+                    'import_status': res.status_code,
+                    'import_response': res.json()
+                })
         return output    
         
     
     def create_testplan(self, testplan_name:str, testplan_desc: str) -> Jirakey:
+        """
+        This function return Jira key, create new test plan when not found.
+
+        It is idempotent, which means that call it multiple times with same input 
+        produces the same result as call it once.
+        """
         assert testplan_name, "Test plan name cannot be None"
         return self.jira.create_testplan(summary=testplan_name, description=testplan_desc)
 
@@ -107,10 +121,8 @@ class CuJiraX:
             test_key = tests[0] if ignore_duplicate else None
             assert test_key, "Test key cannot be None"
             
-            # result.Test(testKey=test_key, status=result.Status.EXECUTING.value)
             statuses = [step.result.status.value for step in el.steps]
             agg_result = "passed" if all(s == 'passed' for s in statuses) else "failed"
-            print(test_key, agg_result)
             result_tests.append(result.Test(testKey=str(test_key), status=agg_result))
         return result_tests
 
@@ -130,10 +142,16 @@ class CuJiraX:
         return found, not_found
     
     @classmethod
-    def _new_testcase(cls, element: Element, testset_key: Jirakey, parent_testset_key: Jirakey, project_key: str):
+    def _new_testcase(
+        cls, 
+        element: Element, 
+        project_key: str, 
+        testset_key: Jirakey=None, 
+        parent_testset_key: Jirakey = None
+    ):
         step_definitions = [(f"{step.keyword} {step.name}", step.result.status.value) for step in element.steps]
         test_name = cls.scenarioid_to_tescasename(element.id, element.keyword)
-        test_sets = [str(x) for x in [testset_key, parent_testset_key] if x]
+        test_sets = [str(x) for x in [testset_key, parent_testset_key] if x] if parent_testset_key else []
 
         return test.CucumberTestCase(
             fields=test.Fields(
@@ -152,6 +170,8 @@ class CuJiraX:
         jira_key = j.get_tests(test_name)
         if jira_key: 
             print("found test:", jira_key[0])
+            
+            # Update all Step Definition in the description
             j.jira.update_issue_field(jira_key[0], fields={"description": "\n".join([s[0] for s in step_definitions])})
             return jira_key[0]
 
