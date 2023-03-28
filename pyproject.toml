@@ -9,6 +9,11 @@ readme = "README.md"
 license = {file = "LICENSE"}
 classifiers = ["License :: OSI Approved :: MIT License"]
 dynamic = ["version", "description"]
+dependencies = [
+    "pydantic",
+    "atlassian-python-api",
+    "requests"
+]
 
 [project.urls]
 Home = "https://github.com/maxleow/cujirax"
