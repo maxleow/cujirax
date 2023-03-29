@@ -2,7 +2,7 @@
 Cucumber result to Jira Xray Test repository
 
 """
-__version__ = "0.4.0"
+__version__ = "0.4.1"
 
 
 import datetime
@@ -95,6 +95,7 @@ class CuJiraX:
                 'testexecution_name': testexecution_name,
                 'test_plan': testplan_key,
                 'tests': tests,
+                'test_environments': self.result_info.testEnvironments
             })
             
             test_cases = [n for n in map(lambda x: self._new_testcase(x, self.jira_project, ticket_ts, self.parent_testset_key), new)]
