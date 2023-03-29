@@ -2,7 +2,7 @@
 Cucumber result to Jira Xray Test repository
 
 """
-__version__ = "0.2.2"
+__version__ = "0.3.0"
 
 
 import datetime
@@ -23,9 +23,29 @@ class CuJiraX:
         self.testexecution_name = None
         self.testexecution_desc = None
         self.parent_testset_key = parent_testset_key
+        self.result_info = result.Info(summary="TBA", description="TBA")
+
+    def set_testsut_version(self, version: str):
+        self.result_info.version = version
+    
+    def set_test_user(self, user: str):
+        self.result_info.user = user
+
+    def set_test_revision(self, rev: str):
+        self.result_info.revision = rev
+
+    def set_test_startdate(self, date):
+        self.result_info.startDate = date
+
+    def set_test_finishdate(self, date):
+        self.result_info.finishDate = date
 
     def set_testexecution(self, jira_key: str):
         self.testexecution = Jirakey(jira_key)
+
+    def set_test_environments(self, environments: list):
+        self.result_info.testEnvironments = environments
+
 
     def set_testexecution_name(self, testexecution_name: str):
         self.testexecution_name = testexecution_name
@@ -82,13 +102,14 @@ class CuJiraX:
             
             # Import Results
             if import_result:
+                self.result_info.summary = testexecution_name
+                self.result_info.description = self.testexecution_desc or f.description or "TBA"
+                self.result_info.testPlanKey = str(testplan_key) if testplan_key else testplan_key
+                
                 _tests = self._get_results(f.elements, self.jira, ignore_duplicate)
+                
                 req = result.RequestBody(
-                    info=result.Info(
-                        summary=testexecution_name,
-                        description=self.testexecution_desc or f.description or "TBA",
-                        testPlanKey=str(testplan_key) if testplan_key else testplan_key
-                    ),
+                    info=self.result_info,
                     tests= _tests,
                     testExecutionKey=str(ticket_te)
                 )
