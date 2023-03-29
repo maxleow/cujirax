@@ -32,7 +32,7 @@ class Issue(BaseModel):
     description: str
 
 
-class JiraX:
+class JiraX(Jira):
     def __init__(self, key: str,
                  domain: str = None,
                  email: str = None,
@@ -43,10 +43,11 @@ class JiraX:
         jira_secret = secret or os.getenv("JIRA_SECRET")
 
         self.key = key
-        self.jira = Jira(
+        super().__init__(
             url=f'https://{jira_domain}',
             username=jira_email,
             password=jira_secret)
+        
 
     def get_testsets(self, summary: str) -> List[Jirakey]:
         return self.get_issues(summary=summary, type="Test Set")
@@ -59,12 +60,12 @@ class JiraX:
 
     def get_issues(self, summary: str, type: str) -> List[Jirakey]:
         query = f'issuetype="{type}" AND summary~"{summary}" AND project="{self.key}"'
-        issues = self.jira.jql(query).get("issues")
+        issues = self.jql(query).get("issues")
         
         return [Jirakey(issue.get('key')) for issue in issues if issue.get('fields')['summary'] == summary]
 
     def link(self, parent_jira: str, child_jira: str, type="Parents"):
-        return self.jira.create_issue_link({
+        return self.create_issue_link({
             "type": {"name": type},
             "inwardIssue": {"key": Jirakey(child_jira)},
             "outwardIssue": {"key": Jirakey(parent_jira)}
@@ -73,7 +74,7 @@ class JiraX:
     def create_issue(self, summary: str, description: str, issue_type: str) -> Jirakey:
         issue = self.get_issues(summary, issue_type)
         if issue:
-            self.jira.update_issue_field
+            self.update_issue_field
             jira_key = issue[0]
             return jira_key
 
@@ -83,7 +84,7 @@ class JiraX:
             issuetype=IssueType(name=issue_type),
             description=description)
         
-        response = self.jira.create_issue(fields=issue.dict())
+        response = self.create_issue(fields=issue.dict())
         return Jirakey(response.get('key'))
 
     def create_testset(self, summary: str, description: str) -> Jirakey:

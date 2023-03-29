@@ -2,7 +2,7 @@
 Cucumber result to Jira Xray Test repository
 
 """
-__version__ = "0.3.0"
+__version__ = "0.4.0"
 
 
 import datetime
@@ -56,7 +56,7 @@ class CuJiraX:
 
     def to_xray(
             self, 
-            cucumber_json: str, 
+            cucumber_json: str,
             testplan_key: str = None, 
             import_result=True, 
             ignore_duplicate=True
@@ -196,7 +196,7 @@ class CuJiraX:
             print("found test:", jira_key[0])
             
             # Update all Step Definition in the description
-            j.jira.update_issue_field(jira_key[0], fields={"description": "\n".join([s[0] for s in step_definitions])})
+            j.update_issue_field(jira_key[0], fields={"description": "\n".join([s[0] for s in step_definitions])})
             return jira_key[0]
 
     @staticmethod
