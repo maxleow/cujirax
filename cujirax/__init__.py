@@ -2,7 +2,7 @@
 Cucumber result to Jira Xray Test repository
 
 """
-__version__ = "0.4.2"
+__version__ = "0.4.3"
 
 
 import datetime
@@ -86,9 +86,9 @@ class CuJiraX:
                 ignore_duplicate=ignore_duplicate
             )
             
-            tests = [n for n in map(lambda x: self._update_description_if_exist(x,self.jira), exists)]
+            tests = [str(n) for n in map(lambda x: self._update_description_if_exist(x,self.jira), exists)]
             output.update({
-                'test_set': ticket_ts,
+                'test_set': str(ticket_ts),
                 'testset_name': testset_name,
                 'parent_testset': self.parent_testset_key,
                 'test_execution': str(ticket_te),
