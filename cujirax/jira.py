@@ -59,19 +59,35 @@ class JiraX(Jira):
         return self.get_issues(summary=summary, type="Test")
 
     def get_issues(self, summary: str, type: str) -> List[Jirakey]:
-        query = f'issuetype="{type}" AND summary~"{summary}" AND project="{self.key}"'
+        _summary = summary.replace("[", "").replace("]", "")
+        query = f'issuetype="{type}" AND summary~"{_summary}" AND project="{self.key}"'
         issues = self.jql(query).get("issues")
         
         return [Jirakey(issue.get('key')) for issue in issues if issue.get('fields')['summary'] == summary]
 
     def link(self, parent_jira: str, child_jira: str, type="Parents"):
+        """
+        Common Types:
+        Name, Inward, Outward
+        'Blocks', 'is blocked by', 'blocks'
+        'Cloners', 'is cloned by', 'clones'
+        'Defect', 'created by', 'created'
+        'Duplicate', 'is duplicated by', 'duplicates'
+        'Issue split', 'split from', 'split to'
+        'Parents', 'Child', 'Parent'
+        'Problem/Incident', 'is caused by', 'causes'
+        'Relates', 'relates to', 'relates to'
+        'Require', 'required by', 'requires'
+        'Test', 'is tested by', 'tests
+
+        """
         return self.create_issue_link({
             "type": {"name": type},
-            "inwardIssue": {"key": Jirakey(child_jira)},
-            "outwardIssue": {"key": Jirakey(parent_jira)}
+            "inwardIssue": {"key": str(Jirakey(child_jira))},
+            "outwardIssue": {"key": str(Jirakey(parent_jira))}
         })
 
-    def create_issue(self, summary: str, description: str, issue_type: str) -> Jirakey:
+    def _create(self, summary: str, description: str, issue_type: str) -> Jirakey:
         issue = self.get_issues(summary, issue_type)
         if issue:
             self.update_issue_field
@@ -88,10 +104,10 @@ class JiraX(Jira):
         return Jirakey(response.get('key'))
 
     def create_testset(self, summary: str, description: str) -> Jirakey:
-        return self.create_issue(summary, description, "Test Set")
+        return self._create(summary, description, "Test Set")
 
     def create_testexecution(self, summary: str, description: str) -> Jirakey:
-        return self.create_issue(summary, description, "Test Execution")
+        return self._create(summary, description, "Test Execution")
 
     def create_testplan(self, summary: str, description: str) -> Jirakey:
-        return self.create_issue(summary, description, "Test Plan")
+        return self._create(summary, description, "Test Plan")

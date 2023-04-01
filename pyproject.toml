@@ -12,7 +12,8 @@ dynamic = ["version", "description"]
 dependencies = [
     "pydantic",
     "atlassian-python-api",
-    "requests"
+    "requests",
+    "loguru"
 ]
 
 [project.urls]

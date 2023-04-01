@@ -2,7 +2,7 @@
 Cucumber result to Jira Xray Test repository
 
 """
-__version__ = "0.4.3"
+__version__ = "0.5.11"
 
 
 import datetime
@@ -12,6 +12,8 @@ import cujirax.xray.import_results as result
 import cujirax.xray.import_tests as test
 from cujirax.cucumber import Element
 from cujirax.jira import Jirakey, JiraX, Project
+from loguru import logger
+from collections import Counter
 
 
 class CuJiraX:
@@ -41,14 +43,23 @@ class CuJiraX:
         self.result_info.finishDate = date
 
     def set_testexecution(self, jira_key: str):
-        self.testexecution = Jirakey(jira_key)
+        try:
+            self.testexecution = str(Jirakey(jira_key))
+        except ValueError:
+            self.testexecution = None
+
+    def set_testplan(self, testplan_key: str):
+        try:
+            self.result_info.testPlanKey = str(Jirakey(testplan_key))
+        except ValueError:
+            self.result_info.testPlanKey = None
 
     def set_test_environments(self, environments: list):
         self.result_info.testEnvironments = environments
 
 
     def set_testexecution_name(self, testexecution_name: str):
-        self.testexecution_name = testexecution_name
+        self.testexecution_name = testexecution_name if testexecution_name else None
 
     def set_testexecution_desc(self, description: str):
         self.testexecution_desc = description
@@ -57,7 +68,6 @@ class CuJiraX:
     def to_xray(
             self, 
             cucumber_json: str,
-            testplan_key: str = None, 
             import_result=True, 
             ignore_duplicate=True
         )-> dict:
@@ -66,7 +76,7 @@ class CuJiraX:
         output = {}
         for f in s1.__root__:
             testset_name = f.uri.split("/")[-1]
-            testexecution_name = self.testexecution_name or datetime.date.today().strftime("%Y%m%d") + " :: " + testset_name
+            testexecution_name = self.testexecution_name or testset_name + " :: " + datetime.date.today().strftime("%Y%m%d") 
 
             ticket_ts, ticket_te = [
                 self.jira.create_testset(
@@ -93,10 +103,12 @@ class CuJiraX:
                 'parent_testset': self.parent_testset_key,
                 'test_execution': str(ticket_te),
                 'testexecution_name': testexecution_name,
-                'test_plan': testplan_key,
-                'tests': tests,
+                'test_plan': self.result_info.testPlanKey,
+                'existing_tests': tests,
                 'test_environments': self.result_info.testEnvironments
             })
+
+            logger.info(output)
             
             test_cases = [n for n in map(lambda x: self._new_testcase(x, self.jira_project, ticket_ts, self.parent_testset_key), new)]
             test.bulk_import(test_cases) if test_cases else None
@@ -105,7 +117,6 @@ class CuJiraX:
             if import_result:
                 self.result_info.summary = testexecution_name
                 self.result_info.description = self.testexecution_desc or f.description or "TBA"
-                self.result_info.testPlanKey = str(testplan_key) if testplan_key else testplan_key
                 
                 _tests = self._get_results(f.elements, self.jira, ignore_duplicate)
                 
@@ -116,8 +127,8 @@ class CuJiraX:
                 )
                 res = result.import_xray_json_results(req)
                 output.update({
-                    'import_status': res.status_code,
-                    'import_response': res.json()
+                    'import_result_status': res.status_code,
+                    'import_result_response': res.json()
                 })
         return output    
         
@@ -143,6 +154,8 @@ class CuJiraX:
             test_key = tests[0]
             if not ignore_duplicate:
                 if len(tests) > 1:
+                    logger.error(test_name)
+                    logger.error(["{}".format(t) for t in tests])
                     raise ValueError("More than 1 test key detected: ", tests, test_name)
                     
             statuses = [step.result.status.value for step in el.steps]
@@ -157,12 +170,24 @@ class CuJiraX:
         
         for el in elements:
             test_name = cls.scenarioid_to_tescasename(el.id, el.keyword)
+            logger.info("searching_test_name: " + test_name)
+
             tests = j.get_tests(test_name)
+
             if tests and not ignore_duplicate:
                 if len(tests) > 1:
+                    logger.error(test_name)
+                    logger.error(["{}".format(t) for t in tests])
                     raise ValueError("More than 1 test key detected: ", tests, test_name)
-            print("[searching...]", test_name, tests)
+            logger.info("found_in_jira: " + str(tests))
             found.append(el) if j.get_tests(test_name) else not_found.append(el)
+        
+        # check duplicate for new test
+        if not ignore_duplicate:
+            new_testnames = [cls.scenarioid_to_tescasename(el.id, el.keyword) for el in not_found]
+            duplicates = [item for item, count in Counter(new_testnames).items() if count > 1]
+            if duplicates:
+                raise ValueError("More than 1 same test detected: ", duplicates)
 
         return found, not_found
     
@@ -177,7 +202,6 @@ class CuJiraX:
         step_definitions = [(f"{step.keyword} {step.name}", step.result.status.value) for step in element.steps]
         test_name = cls.scenarioid_to_tescasename(element.id, element.keyword)
         test_sets = [str(x) for x in [testset_key, parent_testset_key] if x] if parent_testset_key else []
-        print("testsets:", test_sets)
         return test.CucumberTestCase(
             fields=test.Fields(
                 summary=test_name, 
@@ -194,8 +218,6 @@ class CuJiraX:
 
         jira_key = j.get_tests(test_name)
         if jira_key: 
-            print("found test:", jira_key[0])
-            
             # Update all Step Definition in the description
             j.update_issue_field(jira_key[0], fields={"description": "\n".join([s[0] for s in step_definitions])})
             return jira_key[0]
