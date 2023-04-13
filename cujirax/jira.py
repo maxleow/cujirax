@@ -3,7 +3,7 @@ import re
 from atlassian import Jira
 from typing import List
 from pydantic import BaseModel
-
+from loguru import logger
 
 class Jirakey:
     value: str
@@ -58,9 +58,15 @@ class JiraX(Jira):
     def get_tests(self, summary: str) -> List[Jirakey]:
         return self.get_issues(summary=summary, type="Test")
 
-    def get_issues(self, summary: str, type: str) -> List[Jirakey]:
-        _summary = summary.replace("[", "").replace("]", "")
-        query = f'issuetype="{type}" AND summary~"{_summary}" AND project="{self.key}"'
+    def get_issues(self, summary: str, type: str, labels: List[str] = []) -> List[Jirakey]:
+        # filter out problematic strings in summary
+        if labels:
+            labels = [f"labels='{l}'" for l in labels]
+            query = f'issuetype="{type}" AND project="{self.key}" AND {" AND ".join(labels)}'
+        else:
+            _summary = summary.replace("[", "").replace("]", "")
+            query = f'issuetype="{type}" AND summary~"{_summary}" AND project="{self.key}"'
+        logger.debug(f"query: '{query}'")
         issues = self.jql(query).get("issues")
         
         return [Jirakey(issue.get('key')) for issue in issues if issue.get('fields')['summary'] == summary]
@@ -87,8 +93,8 @@ class JiraX(Jira):
             "outwardIssue": {"key": str(Jirakey(parent_jira))}
         })
 
-    def _create(self, summary: str, description: str, issue_type: str) -> Jirakey:
-        issue = self.get_issues(summary, issue_type)
+    def _create(self, summary: str, description: str, issue_type: str, labels: List[str]) -> Jirakey:
+        issue = self.get_issues(summary, issue_type, labels)
         if issue:
             self.update_issue_field
             jira_key = issue[0]
@@ -101,13 +107,18 @@ class JiraX(Jira):
             description=description)
         
         response = self.create_issue(fields=issue.dict())
-        return Jirakey(response.get('key'))
+        
+        key = Jirakey(response.get('key'))
+        logger.info(f"updating label {labels} to: {key.value}")
+        self.issue_update(key.value, fields={"labels": labels})
 
-    def create_testset(self, summary: str, description: str) -> Jirakey:
-        return self._create(summary, description, "Test Set")
+        return key
 
-    def create_testexecution(self, summary: str, description: str) -> Jirakey:
-        return self._create(summary, description, "Test Execution")
+    def create_testset(self, summary: str, description: str, labels: List[str] = []) -> Jirakey:
+        return self._create(summary, description, "Test Set", labels)
 
-    def create_testplan(self, summary: str, description: str) -> Jirakey:
-        return self._create(summary, description, "Test Plan")
+    def create_testexecution(self, summary: str, description: str, labels: List[str] = []) -> Jirakey:
+        return self._create(summary, description, "Test Execution", labels)
+
+    def create_testplan(self, summary: str, description: str, labels: List[str] = []) -> Jirakey:
+        return self._create(summary, description, "Test Plan", labels)

@@ -4,6 +4,9 @@ from typing import List, Union
 from pydantic import BaseModel, Field
 import os
 import requests
+import time
+import functools
+
 
 xray_url = "https://xray.cloud.getxray.app"
 
@@ -25,6 +28,24 @@ class Authentication(BaseModel):
     client_secret: str = os.getenv("XRAY_CLIENT_SECRET")
 
 
+def retry(max_retries=3, delay=1):
+    def decorator_retry(func):
+        @functools.wraps(func)
+        def wrapper_retry(*args, **kwargs):
+            retries = 0
+            while retries < max_retries:
+                try:
+                    return func(*args, **kwargs)
+                except Exception as e:
+                    retries += 1
+                    print(f"Retry {retries}/{max_retries} - Error: {e}")
+                    time.sleep(delay)
+            raise Exception(f"Failed after {max_retries} retries")
+        return wrapper_retry
+    return decorator_retry
+
+
+@retry(max_retries=5, delay=2)
 def login()-> Header:
     header = Header()
     response = post(Endpoint.AUTHENTICATE.value, Authentication(), header)

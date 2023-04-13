@@ -2,7 +2,7 @@
 Cucumber result to Jira Xray Test repository
 
 """
-__version__ = "0.5.11"
+__version__ = "0.6.0"
 
 
 import datetime
@@ -17,7 +17,7 @@ from collections import Counter
 
 
 class CuJiraX:
-    def __init__(self, jira_project: str, parent_testset_key: str = None) -> None:
+    def __init__(self, jira_project: str, parent_testset_key: str = None, addional_identifier: str = None) -> None:
         self.jira_project = jira_project
         self.jira = JiraX(jira_project)
         
@@ -26,6 +26,7 @@ class CuJiraX:
         self.testexecution_desc = None
         self.parent_testset_key = parent_testset_key
         self.result_info = result.Info(summary="TBA", description="TBA")
+        self.addional_identifier = addional_identifier
 
     def set_testsut_version(self, version: str):
         self.result_info.version = version
@@ -69,14 +70,18 @@ class CuJiraX:
             self, 
             cucumber_json: str,
             import_result=True, 
+            import_testcase=True,
             ignore_duplicate=True
-        )-> dict:
+        )-> list:
 
         s1 = cucumber.Model.parse_file(cucumber_json)
-        output = {}
+        output = []
         for f in s1.__root__:
+            root = {}
             testset_name = f.uri.split("/")[-1]
             testexecution_name = self.testexecution_name or testset_name + " :: " + datetime.date.today().strftime("%Y%m%d") 
+            if self.addional_identifier:
+                testexecution_name = f"{self.addional_identifier} :: {testexecution_name}"
 
             ticket_ts, ticket_te = [
                 self.jira.create_testset(
@@ -85,51 +90,61 @@ class CuJiraX:
                 ),
                 self.testexecution or self.jira.create_testexecution(
                     summary=testexecution_name, 
-                    description=self.testexecution_desc or f.description or "TBA"
+                    description=self.testexecution_desc or f.description or "TBA",
+                    labels=[f'c{datetime.date.today().strftime("%Y%m%d")}', self.addional_identifier]
                 ),
             ]
-
-            # Import Test cases
-            exists, new = self._split_elements_to_exist_and_new(
-                elements=f.elements, 
-                j=self.jira, 
-                ignore_duplicate=ignore_duplicate
-            )
-            
-            tests = [str(n) for n in map(lambda x: self._update_description_if_exist(x,self.jira), exists)]
-            output.update({
+            root.update({
                 'test_set': str(ticket_ts),
                 'testset_name': testset_name,
                 'parent_testset': self.parent_testset_key,
                 'test_execution': str(ticket_te),
                 'testexecution_name': testexecution_name,
                 'test_plan': self.result_info.testPlanKey,
-                'existing_tests': tests,
                 'test_environments': self.result_info.testEnvironments
             })
 
-            logger.info(output)
-            
-            test_cases = [n for n in map(lambda x: self._new_testcase(x, self.jira_project, ticket_ts, self.parent_testset_key), new)]
-            test.bulk_import(test_cases) if test_cases else None
+            # Import Test cases
+            if import_testcase:
+                try:
+                    exists, new = self._split_elements_to_exist_and_new(
+                        elements=f.elements, 
+                        j=self.jira, 
+                        ignore_duplicate=ignore_duplicate
+                    )
+                except ValueError as e:
+                    raise type(e)(f"{f.uri}: {str(e)}") from e
+                
+                tests = [str(n) for n in map(
+                    lambda x: self._update_description_if_exist(x,self.jira), exists)]
+                root.update({
+                    'existing_tests': tests,
+                })
+
+                logger.info(root)
+                
+                test_cases = [n for n in map(lambda x: self._new_testcase(x, self.jira_project, ticket_ts, self.parent_testset_key), new)]
+                test.bulk_import(test_cases) if test_cases else None
             
             # Import Results
             if import_result:
                 self.result_info.summary = testexecution_name
                 self.result_info.description = self.testexecution_desc or f.description or "TBA"
                 
-                _tests = self._get_results(f.elements, self.jira, ignore_duplicate)
-                
+                _tests, _result = self._get_results(f.elements, self.jira, ignore_duplicate)
+                logger.debug("tests:" + str(_tests) + ", result: " + _result)
                 req = result.RequestBody(
                     info=self.result_info,
                     tests= _tests,
                     testExecutionKey=str(ticket_te)
                 )
                 res = result.import_xray_json_results(req)
-                output.update({
+                root.update({
+                    'result': _result,
                     'import_result_status': res.status_code,
                     'import_result_response': res.json()
                 })
+            output.append(root)
         return output    
         
     
@@ -145,11 +160,13 @@ class CuJiraX:
 
     @classmethod
     def _get_results(cls, elements: Element, j: JiraX, ignore_duplicate):
-        result_tests = []
+        test_request_obj = []
+        results = []
         for el in elements:
             test_name = cls.scenarioid_to_tescasename(el.id, el.keyword)
             tests = j.get_tests(test_name)
-            assert tests, "Test not created: {}".format(test_name)
+            if not tests:
+                raise ValueError("Test not created: {}".format(test_name))
             
             test_key = tests[0]
             if not ignore_duplicate:
@@ -160,8 +177,10 @@ class CuJiraX:
                     
             statuses = [step.result.status.value for step in el.steps]
             agg_result = "passed" if all(s == 'passed' for s in statuses) else "failed"
-            result_tests.append(result.Test(testKey=str(test_key), status=agg_result))
-        return result_tests
+            test_request_obj.append(result.Test(testKey=str(test_key), status=agg_result))
+            results.append(agg_result)
+        grand_result = "passed" if all(s == 'passed' for s in results) else "failed"
+        return test_request_obj, grand_result
 
     @classmethod
     def _split_elements_to_exist_and_new(cls, elements: Element, j: JiraX, ignore_duplicate):
