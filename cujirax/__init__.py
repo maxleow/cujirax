@@ -2,7 +2,7 @@
 Cucumber result to Jira Xray Test repository
 
 """
-__version__ = "0.6.0"
+__version__ = "0.7.1"
 
 
 import datetime

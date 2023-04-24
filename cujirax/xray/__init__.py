@@ -1,6 +1,7 @@
 from enum import Enum
 import json
-from typing import List, Union
+from typing import List, Union, AnyStr
+from loguru import logger
 from pydantic import BaseModel, Field
 import os
 import requests
@@ -16,6 +17,7 @@ class Endpoint(Enum):
     AUTHENTICATE = "/api/v2/authenticate"
     CHECK_IMPORT_TEST_STATUS = "/api/v2/import/test/bulk/{}/status"
     IMPORT_XRAY_JSON_RESULTS = "/api/v2/import/execution"
+    GRAPHQL = "/api/v1/graphql"
 
 
 class Header(BaseModel):
@@ -54,12 +56,15 @@ def login()-> Header:
         return header
     raise Exception("Authentication error: Invalid credentials")
 
-def post(endpoint: str, payload: Union[BaseModel, List[BaseModel]], headers: Header)-> requests.Response:
+def post(endpoint: str, payload: Union[BaseModel, List[BaseModel], AnyStr], headers: Header)-> requests.Response:
     url = f"{xray_url}{endpoint}"
     if isinstance(payload, list):
         _payload = [p.dict(by_alias=True, exclude_none=True) for p in payload]
         _payload = json.dumps(_payload)
         # print("payload", _payload)
+    elif isinstance(payload, str): 
+        logger.info("is string type")
+        _payload = payload
     else:
         _payload = payload.json(by_alias=True, exclude_none=True)
 
@@ -73,9 +78,10 @@ def post(endpoint: str, payload: Union[BaseModel, List[BaseModel]], headers: Hea
     response = requests.request(**parameters)
     return response
 
-def get(endpoint: str,headers: Header) -> requests.Response:
+def get(endpoint: str, headers: Header, payload: str= None) -> requests.Response:
     url = f"{xray_url}{endpoint}"
-
+    logger.info(f"GET '{url}'")
     return requests.get(
         url=url, 
-        headers=headers.dict(by_alias=True, exclude_none=True))
+        data=payload,
+        headers=headers.dict(by_alias=True, exclude_none=True),)
