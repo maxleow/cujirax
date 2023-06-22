@@ -68,6 +68,24 @@ class Feature(BaseModel):
     tags: Optional[List[Tag]] = None
     elements: Optional[List[Element]] = None
 
+    @staticmethod
+    def replace_square_brackets(value: str):
+        return value.replace('[', '(').replace(']', ')') 
+
+    def __init__(self, uri, name, description=None, keyword=None, tags=None, elements=None):
+        # Remove characters from the name variable
+        name = Feature.replace_square_brackets(name)
+
+        super().__init__(uri=uri, name=name, description=description, keyword=keyword, tags=tags, elements=elements)
+
+
+    def __setattr__(self, name, value):
+        if name == 'name' and value is not None:
+            # Remove characters from the name variable
+            value = Feature.replace_square_brackets(value)
+
+        super().__setattr__(name, value)
+
 
 class Model(BaseModel):
     __root__: List[Feature]

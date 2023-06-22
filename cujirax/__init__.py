@@ -2,7 +2,7 @@
 Cucumber result to Jira Xray Test repository
 
 """
-__version__ = "0.7.1"
+__version__ = "0.7.3"
 
 
 import datetime
@@ -14,6 +14,11 @@ from cujirax.cucumber import Element
 from cujirax.jira import Jirakey, JiraX, Project
 from loguru import logger
 from collections import Counter
+
+
+class DuplicateValueError(Exception):
+    """Raised when a duplicate Scenario is found."""
+    pass
 
 
 class CuJiraX:
@@ -113,7 +118,7 @@ class CuJiraX:
                         ignore_duplicate=ignore_duplicate
                     )
                 except ValueError as e:
-                    raise type(e)(f"{f.uri}: {str(e)}") from e
+                    raise DuplicateValueError(f"{str(ticket_te)}:{f.uri}:{str(e)}")
                 
                 tests = [str(n) for n in map(
                     lambda x: self._update_description_if_exist(x,self.jira), exists)]
