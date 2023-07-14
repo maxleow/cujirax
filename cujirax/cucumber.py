@@ -72,11 +72,11 @@ class Feature(BaseModel):
     def replace_square_brackets(value: str):
         return value.replace('[', '(').replace(']', ')') 
 
-    def __init__(self, uri, name, description=None, keyword=None, tags=None, elements=None):
+    def __init__(self, uri, name, **kwargs):
         # Remove characters from the name variable
         name = Feature.replace_square_brackets(name)
 
-        super().__init__(uri=uri, name=name, description=description, keyword=keyword, tags=tags, elements=elements)
+        super().__init__(uri=uri, name=name, **kwargs)
 
 
     def __setattr__(self, name, value):
