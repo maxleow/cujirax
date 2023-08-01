@@ -2,7 +2,7 @@
 Cucumber result to Jira Xray Test repository
 
 """
-__version__ = "0.7.5"
+__version__ = "0.7.6"
 
 
 import datetime
@@ -167,51 +167,56 @@ class CuJiraX:
     def _get_results(cls, elements: Element, j: JiraX, ignore_duplicate):
         test_request_obj = []
         results = []
-        for el in elements:
-            test_name = cls.scenarioid_to_tescasename(el.id, el.keyword)
-            tests = j.get_tests(test_name)
-            if not tests:
-                raise ValueError("Test not created: {}".format(test_name))
-            
-            test_key = tests[0]
-            if not ignore_duplicate:
-                if len(tests) > 1:
-                    logger.error(test_name)
-                    logger.error(["{}".format(t) for t in tests])
-                    raise ValueError("More than 1 test key detected: ", tests, test_name)
-                    
-            statuses = [step.result.status.value for step in el.steps]
-            agg_result = "passed" if all(s == 'passed' for s in statuses) else "failed"
-            test_request_obj.append(result.Test(testKey=str(test_key), status=agg_result))
-            results.append(agg_result)
-        grand_result = "passed" if all(s == 'passed' for s in results) else "failed"
+        logger.info(elements)
+        if elements:
+            for el in elements:
+                test_name = cls.scenarioid_to_tescasename(el.id, el.keyword)
+                tests = j.get_tests(test_name)
+                if not tests:
+                    raise ValueError("Test not created: {}".format(test_name))
+                
+                test_key = tests[0]
+                if not ignore_duplicate:
+                    if len(tests) > 1:
+                        logger.error(test_name)
+                        logger.error(["{}".format(t) for t in tests])
+                        raise ValueError("More than 1 test key detected: ", tests, test_name)
+                        
+                statuses = [step.result.status.value for step in el.steps]
+                agg_result = "passed" if all(s == 'passed' for s in statuses) else "failed"
+                test_request_obj.append(result.Test(testKey=str(test_key), status=agg_result))
+                results.append(agg_result)
+            grand_result = "passed" if all(s == 'passed' for s in results) else "failed"
+        else:
+            grand_result = "failed"
         return test_request_obj, grand_result
 
     @classmethod
     def _split_elements_to_exist_and_new(cls, elements: Element, j: JiraX, ignore_duplicate):
         found= []
         not_found = []
-        
-        for el in elements:
-            test_name = cls.scenarioid_to_tescasename(el.id, el.keyword)
-            logger.info("searching_test_name: " + test_name)
+        logger.info(elements)
+        if elements:
+            for el in elements:
+                test_name = cls.scenarioid_to_tescasename(el.id, el.keyword)
+                logger.info("searching_test_name: " + test_name)
 
-            tests = j.get_tests(test_name)
+                tests = j.get_tests(test_name)
 
-            if tests and not ignore_duplicate:
-                if len(tests) > 1:
-                    logger.error(test_name)
-                    logger.error(["{}".format(t) for t in tests])
-                    raise ValueError("More than 1 test key detected: ", tests, test_name)
-            logger.info("found_in_jira: " + str(tests))
-            found.append(el) if j.get_tests(test_name) else not_found.append(el)
-        
-        # check duplicate for new test
-        if not ignore_duplicate:
-            new_testnames = [cls.scenarioid_to_tescasename(el.id, el.keyword) for el in not_found]
-            duplicates = [item for item, count in Counter(new_testnames).items() if count > 1]
-            if duplicates:
-                raise ValueError("More than 1 same test detected: ", duplicates)
+                if tests and not ignore_duplicate:
+                    if len(tests) > 1:
+                        logger.error(test_name)
+                        logger.error(["{}".format(t) for t in tests])
+                        raise ValueError("More than 1 test key detected: ", tests, test_name)
+                logger.info("found_in_jira: " + str(tests))
+                found.append(el) if j.get_tests(test_name) else not_found.append(el)
+            
+            # check duplicate for new test
+            if not ignore_duplicate:
+                new_testnames = [cls.scenarioid_to_tescasename(el.id, el.keyword) for el in not_found]
+                duplicates = [item for item, count in Counter(new_testnames).items() if count > 1]
+                if duplicates:
+                    raise ValueError("More than 1 same test detected: ", duplicates)
 
         return found, not_found
     
