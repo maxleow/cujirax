@@ -64,7 +64,10 @@ class JiraX(Jira):
             labels = [f"labels='{l}'" for l in labels]
             query = f'issuetype="{type}" AND project="{self.key}" AND {" AND ".join(labels)}'
         else:
-            _summary = summary.replace("[", "").replace("]", "")
+            special_chars = ['$', '%', '^', '&', '*', '#', '_', '[',']']
+            tokens = _summary.split(" ")
+            new_tokens = [t for t in tokens if all(char not in special_chars for char in t)]
+            _summary = " ".join(new_tokens)
             query = f'issuetype="{type}" AND summary~"{_summary}" AND project="{self.key}"'
         logger.debug(f"query: '{query}'")
         issues = self.jql(query).get("issues")
