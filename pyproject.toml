@@ -14,7 +14,7 @@ dependencies = [
     "atlassian-python-api",
     "requests",
     "loguru",
-    "jinja",
+    "jinja2"
 ]
 
 [project.urls]
